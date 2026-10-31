@@ -32,7 +32,7 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
  */
 
 public record GLAccountCommand(Long id, String name, Long parentId, String glCode, Boolean disabled, Boolean manualEntriesAllowed,
-        Integer type, Integer usage, String description, Long tagId) {
+        Integer type, Integer usage, String description, Long tagId, String externalId) {
 
     public void validateForCreate() {
 
@@ -62,6 +62,8 @@ public record GLAccountCommand(Long id, String name, Long parentId, String glCod
 
         baseDataValidator.reset().parameter(GLAccountJsonInputParams.TAGID.getValue()).value(this.tagId).ignoreIfNull()
                 .longGreaterThanZero();
+        baseDataValidator.reset().parameter(GLAccountJsonInputParams.EXTERNAL_ID.getValue()).value(this.externalId).ignoreIfNull()
+                .notBlank().notExceedingLengthOf(100);
 
         if (!dataValidationErrors.isEmpty()) {
             throw new PlatformApiDataValidationException("validation.msg.validation.errors.exist", "Validation errors exist.",
@@ -92,8 +94,11 @@ public record GLAccountCommand(Long id, String name, Long parentId, String glCod
                 .notBlank().notExceedingLengthOf(500);
 
         baseDataValidator.reset().parameter(GLAccountJsonInputParams.DISABLED.getValue()).value(this.disabled).ignoreIfNull();
+        baseDataValidator.reset().parameter(GLAccountJsonInputParams.EXTERNAL_ID.getValue()).value(this.externalId).ignoreIfNull()
+                .notBlank().notExceedingLengthOf(100);
 
-        baseDataValidator.reset().anyOfNotNull(this.name, this.glCode, this.parentId, this.type, this.description, this.disabled);
+        baseDataValidator.reset().anyOfNotNull(this.name, this.glCode, this.parentId, this.type, this.description, this.disabled,
+                this.externalId);
 
         if (!dataValidationErrors.isEmpty()) {
             throw new PlatformApiDataValidationException("validation.msg.validation.errors.exist", "Validation errors exist.",

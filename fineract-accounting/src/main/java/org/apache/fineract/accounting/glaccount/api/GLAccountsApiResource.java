@@ -184,6 +184,7 @@ public class GLAccountsApiResource {
                     Note: You may optionally create Hierarchical Chart of Accounts by using the "parentId" property of an Account
                     Mandatory Fields:
                     name, glCode, type, usage and manualEntriesAllowed
+                    Optional: externalId (unique reference of an ERP-owned account). Re-posting the same externalId with an identical payload returns the existing account; a different payload is rejected with HTTP 409.
                     """)
     @AlternativeOperationId("createGLAccount_1")
     @RequestBody(content = @Content(schema = @Schema(implementation = GLAccountsApiResourceSwagger.PostGLAccountsRequest.class)))

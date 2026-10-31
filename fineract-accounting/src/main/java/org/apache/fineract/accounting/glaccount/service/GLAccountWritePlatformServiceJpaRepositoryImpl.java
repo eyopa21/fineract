@@ -18,7 +18,10 @@
  */
 package org.apache.fineract.accounting.glaccount.service;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.accounting.common.AccountingConstants;
 import org.apache.fineract.accounting.glaccount.api.GLAccountJsonInputParams;
@@ -28,6 +31,7 @@ import org.apache.fineract.accounting.glaccount.domain.GLAccountRepository;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountType;
 import org.apache.fineract.accounting.glaccount.exception.GLAccountDisableException;
 import org.apache.fineract.accounting.glaccount.exception.GLAccountDuplicateException;
+import org.apache.fineract.accounting.glaccount.exception.GLAccountExternalIdConflictException;
 import org.apache.fineract.accounting.glaccount.exception.GLAccountInvalidDeleteException;
 import org.apache.fineract.accounting.glaccount.exception.GLAccountInvalidDeleteException.GlAccountInvalidDeleteReason;
 import org.apache.fineract.accounting.glaccount.exception.GLAccountInvalidParentException;
@@ -43,7 +47,9 @@ import org.apache.fineract.infrastructure.codes.domain.CodeValueRepositoryWrappe
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
+import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
+import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -60,6 +66,8 @@ public class GLAccountWritePlatformServiceJpaRepositoryImpl implements GLAccount
 
     private static final Logger LOG = LoggerFactory.getLogger(GLAccountWritePlatformServiceJpaRepositoryImpl.class);
     private static final String GL_ACCOUNT = "glAccount";
+    private static final String EXTERNAL_ID_CONSTRAINT = "acc_gl_account_external_id_UNIQUE";
+    public static final String IDEMPOTENT_REPLAY = "idempotentReplay";
 
     private final GLAccountRepository glAccountRepository;
     private final JournalEntryRepository glJournalEntryRepository;
@@ -74,6 +82,31 @@ public class GLAccountWritePlatformServiceJpaRepositoryImpl implements GLAccount
         try {
             final GLAccountCommand accountCommand = this.fromApiJsonDeserializer.commandFromApiJson(command.json());
             accountCommand.validateForCreate();
+
+            // ERP-owned accounts: an external reference makes creation idempotent. Look up first so an identical
+            // replay returns the existing account and a different payload is refused before anything is written.
+            // The unique index on external_id remains the last line of defence against concurrent creation.
+            final ExternalId externalId = ExternalIdFactory.produce(accountCommand.externalId());
+            if (!externalId.isEmpty()) {
+                final Optional<GLAccount> existing = this.glAccountRepository.findByExternalId(externalId);
+                if (existing.isPresent()) {
+                    final GLAccount account = existing.get();
+                    if (!GLAccountExternalIdPolicy.isSamePayload(accountCommand, account)) {
+                        throw new GLAccountExternalIdConflictException(externalId.getValue(), account.getGlCode());
+                    }
+                    LOG.info("GL account create replayed for external reference {}: returning existing account {}", externalId.getValue(),
+                            account.getId());
+                    final Map<String, Object> replay = new LinkedHashMap<>();
+                    replay.put(IDEMPOTENT_REPLAY, Boolean.TRUE);
+                    replay.put(GLAccountJsonInputParams.EXTERNAL_ID.getValue(), externalId.getValue());
+                    return new CommandProcessingResultBuilder() //
+                            .withCommandId(command.commandId()) //
+                            .withEntityId(account.getId()) //
+                            .withEntityExternalId(externalId) //
+                            .with(replay) //
+                            .build();
+                }
+            }
 
             // check parent is valid
             final Long parentId = command.longValueOfParameterNamed(GLAccountJsonInputParams.PARENT_ID.getValue());
@@ -102,6 +135,7 @@ public class GLAccountWritePlatformServiceJpaRepositoryImpl implements GLAccount
             return new CommandProcessingResultBuilder() //
                     .withCommandId(command.commandId()) //
                     .withEntityId(glAccount.getId()) //
+                    .withEntityExternalId(glAccount.getExternalId()) //
                     .build();
         } catch (final JpaSystemException | DataIntegrityViolationException dve) {
             final Throwable throwable = dve.getMostSpecificCause();
@@ -127,6 +161,12 @@ public class GLAccountWritePlatformServiceJpaRepositoryImpl implements GLAccount
             // is the glAccount valid
             final GLAccount glAccount = this.glAccountRepository.findById(glAccountId)
                     .orElseThrow(() -> new GLAccountNotFoundException(glAccountId));
+
+            // the external reference is owned by the ERP and immutable here (sync is create-only)
+            if (accountCommand.externalId() != null
+                    && !Objects.equals(accountCommand.externalId().trim(), glAccount.getExternalId().getValue())) {
+                throw new GLAccountExternalIdConflictException(accountCommand.externalId(), glAccount.getGlCode());
+            }
 
             final Map<String, Object> changesOnly = glAccount.update(command);
 
@@ -239,7 +279,13 @@ public class GLAccountWritePlatformServiceJpaRepositoryImpl implements GLAccount
      */
     private void handleGLAccountDataIntegrityIssues(final JsonCommand command, final Throwable realCause,
             final NonTransientDataAccessException dve) {
-        if (realCause.getMessage().contains("acc_gl_code")) {
+        final String message = realCause.getMessage() == null ? "" : realCause.getMessage();
+        if (message.contains(EXTERNAL_ID_CONSTRAINT) || message.contains("external_id")) {
+            final String externalId = command.stringValueOfParameterNamedAllowingNull(GLAccountJsonInputParams.EXTERNAL_ID.getValue());
+            throw new GLAccountExternalIdConflictException(externalId);
+        }
+        // Postgres names the gl_code key "acc_gl_account_gl_code_key", not "acc_gl_code" as the JPA annotation does
+        if (message.contains("acc_gl_code") || message.contains("gl_code")) {
             final String glCode = command.stringValueOfParameterNamed(GLAccountJsonInputParams.GL_CODE.getValue());
             throw new GLAccountDuplicateException(glCode);
         }

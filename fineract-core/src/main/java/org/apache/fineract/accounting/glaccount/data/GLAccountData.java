@@ -50,6 +50,7 @@ public class GLAccountData implements Serializable {
     private EnumOptionData type;
     private EnumOptionData usage;
     private String description;
+    private String externalId;
     private String nameDecorated;
     private CodeValueData tagId;
     private Long organizationRunningBalance;

@@ -38,9 +38,12 @@ import org.apache.fineract.accounting.glaccount.api.GLAccountJsonInputParams;
 import org.apache.fineract.infrastructure.codes.domain.CodeValue;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
+import org.apache.fineract.infrastructure.core.domain.ExternalId;
+import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 
 @Entity
-@Table(name = "acc_gl_account", uniqueConstraints = { @UniqueConstraint(columnNames = { "gl_code" }, name = "acc_gl_code") })
+@Table(name = "acc_gl_account", uniqueConstraints = { @UniqueConstraint(columnNames = { "gl_code" }, name = "acc_gl_code"),
+        @UniqueConstraint(columnNames = { "external_id" }, name = "acc_gl_account_external_id_UNIQUE") })
 @Getter
 @Setter
 @NoArgsConstructor
@@ -83,6 +86,13 @@ public class GLAccount extends AbstractPersistableCustom<Long> {
     @JoinColumn(name = "tag_id")
     private CodeValue tagId;
 
+    /**
+     * Reference of this account in the external accounting master (ERP). Unique when present; immutable after creation.
+     * Empty (never null) when the account was created without one.
+     */
+    @Column(name = "external_id", length = 100)
+    private ExternalId externalId = ExternalId.empty();
+
     public static GLAccount fromJson(final GLAccount parent, final JsonCommand command, final CodeValue glAccountTagType) {
         final String name = command.stringValueOfParameterNamed(GLAccountJsonInputParams.NAME.getValue());
         final String glCode = command.stringValueOfParameterNamed(GLAccountJsonInputParams.GL_CODE.getValue());
@@ -92,9 +102,11 @@ public class GLAccount extends AbstractPersistableCustom<Long> {
         final Integer usage = command.integerValueSansLocaleOfParameterNamed(GLAccountJsonInputParams.USAGE.getValue());
         final Integer type = command.integerValueSansLocaleOfParameterNamed(GLAccountJsonInputParams.TYPE.getValue());
         final String description = command.stringValueOfParameterNamed(GLAccountJsonInputParams.DESCRIPTION.getValue());
+        final ExternalId externalId = ExternalIdFactory
+                .produce(command.stringValueOfParameterNamedAllowingNull(GLAccountJsonInputParams.EXTERNAL_ID.getValue()));
         return new GLAccount().setParent(parent).setName(name).setGlCode(glCode).setDisabled(disabled)
                 .setManualEntriesAllowed(manualEntriesAllowed).setType(type).setUsage(usage).setDescription(description)
-                .setTagId(glAccountTagType);
+                .setTagId(glAccountTagType).setExternalId(externalId);
     }
 
     public Map<String, Object> update(final JsonCommand command) {

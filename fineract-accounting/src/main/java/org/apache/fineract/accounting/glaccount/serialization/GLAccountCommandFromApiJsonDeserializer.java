@@ -66,6 +66,9 @@ public final class GLAccountCommandFromApiJsonDeserializer extends AbstractFromA
         final String description = this.fromApiJsonHelper.extractStringNamed(GLAccountJsonInputParams.DESCRIPTION.getValue(), element);
         final Long tagId = this.fromApiJsonHelper.extractLongNamed(GLAccountJsonInputParams.TAGID.getValue(), element);
 
-        return new GLAccountCommand(id, name, parentId, glCode, disabled, manualEntriesAllowed, type, usage, description, tagId);
+        final String externalId = this.fromApiJsonHelper.extractStringNamed(GLAccountJsonInputParams.EXTERNAL_ID.getValue(), element);
+
+        return new GLAccountCommand(id, name, parentId, glCode, disabled, manualEntriesAllowed, type, usage, description, tagId,
+                externalId);
     }
 }

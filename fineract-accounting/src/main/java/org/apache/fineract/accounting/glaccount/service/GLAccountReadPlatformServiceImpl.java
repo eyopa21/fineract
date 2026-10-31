@@ -69,7 +69,7 @@ public class GLAccountReadPlatformServiceImpl implements GLAccountReadPlatformSe
             sb.append(
                     " gl.id as id, name as name, parent_id as parentId, gl_code as glCode, disabled as disabled, manual_journal_entries_allowed as manualEntriesAllowed, ")
                     .append("classification_enum as classification, account_usage as accountUsage, gl.description as description, ")
-                    .append(NAME_DECORATED_BASE_ON_HIERARCHY).append(" as nameDecorated, ")
+                    .append("gl.external_id as externalId, ").append(NAME_DECORATED_BASE_ON_HIERARCHY).append(" as nameDecorated, ")
                     .append("cv.id as codeId, cv.code_value as codeValue ");
             if (this.associationParametersData.isRunningBalanceRequired()) {
                 sb.append(",gl_j.organization_running_balance as organizationRunningBalance ");
@@ -95,6 +95,7 @@ public class GLAccountReadPlatformServiceImpl implements GLAccountReadPlatformSe
             final int usageId = JdbcSupport.getInteger(rs, "accountUsage");
             final EnumOptionData usage = AccountingEnumerations.gLAccountUsage(usageId);
             final String description = rs.getString("description");
+            final String externalId = rs.getString("externalId");
             final String nameDecorated = rs.getString("nameDecorated");
             final Long codeId = rs.wasNull() ? null : rs.getLong("codeId");
             final String codeValue = rs.getString("codeValue");
@@ -105,7 +106,8 @@ public class GLAccountReadPlatformServiceImpl implements GLAccountReadPlatformSe
             }
             return new GLAccountData().setId(id).setName(name).setParentId(parentId).setGlCode(glCode).setDisabled(disabled)
                     .setManualEntriesAllowed(manualEntriesAllowed).setType(accountType).setUsage(usage).setDescription(description)
-                    .setNameDecorated(nameDecorated).setTagId(tagId).setOrganizationRunningBalance(organizationRunningBalance);
+                    .setExternalId(externalId).setNameDecorated(nameDecorated).setTagId(tagId)
+                    .setOrganizationRunningBalance(organizationRunningBalance);
         }
     }
 

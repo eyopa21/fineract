@@ -44,6 +44,9 @@ final class GLAccountsApiResourceSwagger {
         @Schema(example = "16")
         public Long id;
 
+        @Schema(example = "GL-1200")
+        public String externalId;
+
         @Schema(example = "Cash")
         public String name;
 
@@ -112,6 +115,9 @@ final class GLAccountsApiResourceSwagger {
 
         @Schema(example = "Cash at Bangalore")
         public String name;
+
+        @Schema(example = "GL-1200", description = "Reference of the account in the external accounting master. Unique. Creating again with the same reference and payload returns the existing account; a different payload is rejected with 409.")
+        public String externalId;
 
         @Schema(example = "100001")
         public String glCode;
